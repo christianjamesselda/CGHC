@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     buildCommand: npm ci --include=dev && npm ci --include=dev --prefix server && npm ci --include=dev --prefix client && npm run db:generate --prefix server && npm run build --prefix client
-    startCommand: npm run db:migrate --prefix server && npm run db:seed --prefix server && npm start --prefix server
+    startCommand: node server/deploy-start.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
