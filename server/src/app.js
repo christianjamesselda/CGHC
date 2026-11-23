@@ -113,7 +113,10 @@ app.post('/api/auth/register', codeLimiter, async (req, res, next) => {
     const existing = await prisma.user.findUnique({ where: { email: data.email } });
     if (existing?.emailVerifiedAt) return res.status(409).json({ error: 'That email is already registered. Please sign in.' });
     const { password, ...profile } = data;
-    const user = existing || await prisma.user.create({ data: { ...profile, passwordHash: await bcrypt.hash(password, 12) } });
+    const passwordHash = await bcrypt.hash(password, 12);
+    const user = existing
+      ? await prisma.user.update({ where: { id: existing.id }, data: { ...profile, passwordHash } })
+      : await prisma.user.create({ data: { ...profile, passwordHash } });
     const code = String(randomInt(100000, 1000000));
     const verification = await prisma.emailVerification.create({ data: { userId: user.id, codeHash: hash(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) } });
     try {
@@ -228,7 +231,7 @@ app.post('/api/chord-files', auth, staff, async (req,res,next)=>{try{const data=
 app.post('/api/services/:serviceId/assignments', auth, staff, async (req,res,next)=>{try{const data=z.object({memberId:z.string(),role:z.string().trim().min(1).max(80),slot:z.number().int().positive().default(1)}).parse(req.body);const item=await prisma.serviceAssignment.create({data:{...data,serviceId:req.params.serviceId},include:{member:true}});await audit(req,'CREATE','schedules',item.id,null,item);res.status(201).json(item);}catch(e){next(e);}});
 app.delete('/api/assignments/:id', auth, staff, async (req,res,next)=>{try{const before=await prisma.serviceAssignment.findUnique({where:{id:req.params.id}});if(!before)return res.status(404).json({error:'Assignment not found.'});await prisma.serviceAssignment.delete({where:{id:before.id}});await audit(req,'DELETE','schedules',before.id,before,null);res.json({ok:true});}catch(e){next(e);}});
 
-app.get('/api/users', auth, allow('ADMIN'), async (_req, res, next) => { try { res.json(await prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, emailVerifiedAt: true, createdAt: true }, orderBy: { createdAt: 'desc' } })); } catch (e) { next(e); } });
+app.get('/api/users', auth, allow('ADMIN'), async (_req, res, next) => { try { res.json(await prisma.user.findMany({ where: { emailVerifiedAt: { not: null } }, select: { id: true, name: true, email: true, role: true, emailVerifiedAt: true, createdAt: true }, orderBy: { createdAt: 'desc' } })); } catch (e) { next(e); } });
 app.patch('/api/users/:id', auth, allow('ADMIN'), async (req, res, next) => { try { const data = z.object({ role: z.enum(['ADMIN', 'LEADER', 'MEMBER']) }).parse(req.body); const before = await prisma.user.findUnique({ where: { id: req.params.id } }); if (!before) return res.status(404).json({ error: 'User not found.' }); const updated = await prisma.user.update({ where: { id: req.params.id }, data }); await audit(req, 'UPDATE', 'users', updated.id, { role: before.role }, { role: updated.role }); res.json(cleanUser(updated)); } catch (e) { next(e); } });
 app.get('/api/audit', auth, allow('ADMIN', 'LEADER'), async (req, res, next) => { try { res.json(await prisma.auditLog.findMany({ where: { ...(req.query.module ? { module: String(req.query.module) } : {}), ...(req.query.action ? { action: String(req.query.action) } : {}) }, include: { user: { select: { name: true, email: true } } }, orderBy: { createdAt: 'desc' }, take: 500 })); } catch (e) { next(e); } });
 app.get('/api/dashboard', auth, async (_req, res, next) => { try { const now = new Date(); const [members, songs, upcoming, trainings, recentSongs] = await Promise.all([prisma.member.count(), prisma.song.count(), prisma.schedule.findMany({ where: { startsAt: { gte: now } }, orderBy: { startsAt: 'asc' }, take: 6 }), prisma.schedule.count({ where: { type: 'TRAINING', startsAt: { gte: now } } }), prisma.song.findMany({ orderBy: { createdAt: 'desc' }, take: 5 })]); res.json({ members, songs, upcoming, trainings, recentSongs }); } catch (e) { next(e); } });
