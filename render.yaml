@@ -28,11 +28,11 @@ services:
       - key: SMTP_SECURE
         value: "false"
       - key: SMTP_USER
-        value: christianjames.selda@gmail.com
+        value: ccornerstoneglobalharvest@gmail.com
       - key: SMTP_PASS
         sync: false
       - key: SMTP_FROM
-        value: Cornerstone Global Harvest Church <christianjames.selda@gmail.com>
+        value: Cornerstone Global Harvest Church <ccornerstoneglobalharvest@gmail.com>
       - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM

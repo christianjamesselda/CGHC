@@ -98,7 +98,9 @@ async function sendCode(email, code, purpose) {
     await mailer.sendMail({ from: emailFrom, to: email, subject, text, html });
   } catch (error) {
     console.error('SMTP email delivery failed:', error.code || error.message);
-    throw new EmailDeliveryError('Email delivery failed. Please try again shortly.');
+    throw new EmailDeliveryError(process.env.RENDER
+      ? 'SMTP failed. Render Free blocks Gmail SMTP. Upgrade this service to a paid instance or configure an HTTPS email provider.'
+      : 'Email delivery failed. Please try again shortly.');
   }
 }
 const codeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many code requests. Please try again later.' } });
