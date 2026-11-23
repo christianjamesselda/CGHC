@@ -46,6 +46,8 @@ const smtpUser = process.env.SMTP_USER || 'christianjames.selda@gmail.com';
 const smtpPassword = process.env.SMTP_PASS?.replace(/\s/g, '');
 const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
 const smtpPort = Number(process.env.SMTP_PORT || 465);
+const resendApiKey = process.env.RESEND_API_KEY;
+const emailFrom = process.env.EMAIL_FROM || process.env.SMTP_FROM || `Cornerstone Global Harvest Church <${smtpUser}>`;
 const smtpSecure = process.env.SMTP_SECURE
   ? process.env.SMTP_SECURE.toLowerCase() === 'true'
   : smtpPort === 465;
@@ -54,19 +56,50 @@ const mailer = smtpPassword ? nodemailer.createTransport({
   port: smtpPort,
   secure: smtpSecure,
   auth: { user: smtpUser, pass: smtpPassword },
+  connectionTimeout: 8000,
+  greetingTimeout: 8000,
+  socketTimeout: 8000,
 }) : null;
-if (mailer) {
+if (resendApiKey) {
+  console.log('HTTPS email delivery is configured.');
+} else if (mailer) {
   mailer.verify().then(() => console.log(`SMTP email sender ready (${smtpHost}:${smtpPort}, ${smtpUser}).`)).catch((error) => console.error('SMTP connection failed:', error.code || error.message));
 } else {
-  console.warn(`Email sending is not configured. Set SMTP_PASS in server/.env for ${smtpUser}.`);
+  console.warn('Email sending is not configured. Set RESEND_API_KEY and EMAIL_FROM, or configure SMTP.');
 }
+class EmailDeliveryError extends Error {}
 async function sendCode(email, code, purpose) {
-  if (!mailer) throw new Error('Email delivery is not configured. Set SMTP_PASS in server/.env and restart the API.');
   const subject = purpose === 'RESET_PASSWORD' ? 'Your password reset code' : 'Verify your Cornerstone church account';
   const title = purpose === 'RESET_PASSWORD' ? 'Reset your password' : 'Verify your email address';
   const text = `${title}\n\nYour 6-digit code is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email.`;
   const html = `<div style="font-family:Arial,sans-serif;color:#24332b;line-height:1.6"><h2>${title}</h2><p>Enter this code in the Cornerstone church website:</p><p style="font-size:28px;font-weight:700;letter-spacing:8px;color:#17614b">${code}</p><p>This code expires in 10 minutes. If you did not request it, you can ignore this email.</p></div>`;
-  await mailer.sendMail({ from: process.env.SMTP_FROM || `Cornerstone Global Harvest Church <${smtpUser}>`, to: email, subject, text, html });
+  if (resendApiKey) {
+    let response;
+    try {
+      response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: emailFrom, to: [email], subject, text, html }),
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch (error) {
+      console.error('HTTPS email delivery failed:', error.name || error.message);
+      throw new EmailDeliveryError('Email delivery timed out. Please try again shortly.');
+    }
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      console.error('HTTPS email provider rejected the message:', response.status, detail);
+      throw new EmailDeliveryError('Email provider could not send the code. Check the sender address in Render settings.');
+    }
+    return;
+  }
+  if (!mailer) throw new EmailDeliveryError('Email verification is not configured. Add an email provider in the Render settings.');
+  try {
+    await mailer.sendMail({ from: emailFrom, to: email, subject, text, html });
+  } catch (error) {
+    console.error('SMTP email delivery failed:', error.code || error.message);
+    throw new EmailDeliveryError('Email delivery failed. Please try again shortly.');
+  }
 }
 const codeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many code requests. Please try again later.' } });
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many sign-in attempts. Please try again later.' } });
@@ -76,14 +109,21 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, church: process.env.C
 app.post('/api/auth/register', codeLimiter, async (req, res, next) => {
   try {
     const data = authSchema.extend({ name: z.string().trim().min(2).max(100) }).parse(req.body);
-    if (!mailer) return res.status(503).json({ error: 'Email verification is unavailable until SMTP_PASS is configured.' });
-    if (await prisma.user.findUnique({ where: { email: data.email } })) return res.status(409).json({ error: 'That email is already registered.' });
+    if (!resendApiKey && !mailer) return res.status(503).json({ error: 'Email verification is not configured. Ask the site administrator to add an email provider.' });
+    const existing = await prisma.user.findUnique({ where: { email: data.email } });
+    if (existing?.emailVerifiedAt) return res.status(409).json({ error: 'That email is already registered. Please sign in.' });
     const { password, ...profile } = data;
-    const user = await prisma.user.create({ data: { ...profile, passwordHash: await bcrypt.hash(password, 12) } });
+    const user = existing || await prisma.user.create({ data: { ...profile, passwordHash: await bcrypt.hash(password, 12) } });
     const code = String(randomInt(100000, 1000000));
-    await prisma.emailVerification.create({ data: { userId: user.id, codeHash: hash(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) } });
-    await sendCode(user.email, code, 'VERIFY_EMAIL');
-    res.status(201).json({ message: 'Account created. A verification code has been sent to your email.' });
+    const verification = await prisma.emailVerification.create({ data: { userId: user.id, codeHash: hash(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) } });
+    try {
+      await sendCode(user.email, code, 'VERIFY_EMAIL');
+    } catch (error) {
+      await prisma.emailVerification.delete({ where: { id: verification.id } }).catch(() => {});
+      if (!existing) await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+      throw error;
+    }
+    res.status(existing ? 200 : 201).json({ message: 'A verification code has been sent to your email.' });
   } catch (e) { next(e); }
 });
 app.post('/api/auth/verify', codeLimiter, async (req, res, next) => {
@@ -101,7 +141,7 @@ app.post('/api/auth/resend', codeLimiter, async (req, res, next) => {
     const email = z.string().email().parse(req.body.email).toLowerCase();
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || user.emailVerifiedAt) return res.json({ message: 'If the account needs verification, a new code has been sent.' });
-    if (!mailer) return res.status(503).json({ error: 'Email verification is unavailable until SMTP_PASS is configured.' });
+    if (!resendApiKey && !mailer) return res.status(503).json({ error: 'Email verification is not configured. Ask the site administrator to add an email provider.' });
     const code = String(randomInt(100000, 1000000));
     await prisma.emailVerification.create({ data: { userId: user.id, codeHash: hash(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) } });
     await sendCode(email, code, 'VERIFY_EMAIL');
@@ -120,7 +160,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res, next) => {
 app.post('/api/auth/forgot', codeLimiter, async (req, res, next) => {
   try {
     const email = z.string().email().parse(req.body.email).toLowerCase();
-    if (!mailer) return res.status(503).json({ error: 'Email delivery is unavailable until SMTP_PASS is configured.' });
+    if (!resendApiKey && !mailer) return res.status(503).json({ error: 'Email delivery is not configured. Ask the site administrator to add an email provider.' });
     const user = await prisma.user.findUnique({ where: { email } });
     if (user) { const code = String(randomInt(100000, 1000000)); await prisma.emailVerification.create({ data: { userId: user.id, purpose: 'RESET_PASSWORD', codeHash: hash(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) } }); await sendCode(email, code, 'RESET_PASSWORD'); }
     res.json({ message: 'If that account exists, a password reset code has been sent.' });
@@ -208,5 +248,5 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.use((err, _req, res, _next) => { console.error(err); if (err instanceof z.ZodError) return res.status(400).json({ error: err.issues.map(i => i.message).join(' ') }); if (err.code === 'P2002') return res.status(409).json({ error: 'That record already exists.' }); if (err.code === 'P2025') return res.status(404).json({ error: 'Record not found.' }); if (err instanceof multer.MulterError) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'File is larger than the configured upload limit.' : 'Upload could not be processed.' }); res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Something went wrong. Please try again.' : err.message || 'Internal server error.' }); });
+app.use((err, _req, res, _next) => { console.error(err); if (err instanceof EmailDeliveryError) return res.status(503).json({ error: err.message }); if (err instanceof z.ZodError) return res.status(400).json({ error: err.issues.map(i => i.message).join(' ') }); if (err.code === 'P2002') return res.status(409).json({ error: 'That record already exists.' }); if (err.code === 'P2025') return res.status(404).json({ error: 'Record not found.' }); if (err instanceof multer.MulterError) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'File is larger than the configured upload limit.' : 'Upload could not be processed.' }); res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Something went wrong. Please try again.' : err.message || 'Internal server error.' }); });
 app.listen(port, () => console.log(`Church API listening on http://localhost:${port}`));
