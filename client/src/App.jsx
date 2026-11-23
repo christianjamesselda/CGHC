@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
-import { Activity, ArrowDownToLine, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Church, CircleHelp, Clock3, FileMusic, LayoutDashboard, Link2, LogOut, Menu, Moon, Music2, Plus, Search, Settings, ShieldCheck, Sun, Users, X, Dumbbell, Presentation as PresentationIcon, Bell, SlidersHorizontal, Trash2, Edit3, ExternalLink, Play, ChevronLeft, ChevronRight, Filter, Eye, EyeOff } from 'lucide-react';
+import { Activity, ArrowDownToLine, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Church, Clock3, FileMusic, LayoutDashboard, Link2, LogOut, Menu, Moon, Music2, Plus, Search, Settings, ShieldCheck, Sun, Users, X, Dumbbell, Presentation as PresentationIcon, Bell, SlidersHorizontal, Trash2, Edit3, ExternalLink, Play, ChevronLeft, ChevronRight, Filter, Eye, EyeOff } from 'lucide-react';
 import { request, getToken, API_ORIGIN } from './api.js';
 import AuthFlow from './AuthFlow.jsx';
 
@@ -34,9 +34,9 @@ function App() {
       <div className="church-chip"><span className="live-dot"/>{CHURCH}</div>
       <div className="nav-caption">WORKSPACE</div><nav>{nav.map(item => <NavLink key={item.path} to={item.path} end={item.path === '/'} onClick={()=>setMenuOpen(false)} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}><item.icon size={18}/><span>{item.label}</span></NavLink>)}</nav>
       <div className="nav-caption settings-caption">MY ACCOUNT</div><NavLink to="/settings" onClick={()=>setMenuOpen(false)} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}><Settings size={18}/><span>Settings</span></NavLink>
-      <div className="sidebar-bottom"><div className="support-card"><div className="support-icon"><CircleHelp size={18}/></div><div><strong>Need a hand?</strong><small>View setup guide</small></div><ArrowRight size={15}/></div><div className="profile-mini"><div className="avatar avatar-sm">{initials(user.name)}</div><div className="profile-info"><strong>{user.name}</strong><small>{user.role.toLowerCase()}</small></div><button className="icon-btn" title="Sign out" onClick={signOut}><LogOut size={17}/></button></div></div>
+      <div className="sidebar-bottom"><div className="profile-mini"><div className="avatar avatar-sm">{initials(user.name)}</div><div className="profile-info"><strong>{user.name}</strong><small>{user.role.toLowerCase()}</small></div><button className="icon-btn" title="Sign out" onClick={signOut}><LogOut size={17}/></button></div></div>
     </aside>
-    <main className="main-area"><header className="topbar"><div className="top-left"><button className="icon-btn mobile-menu mobile-only" aria-label="Open menu" onClick={()=>setMenuOpen(true)}><Menu size={20}/></button><span className="breadcrumb">Church workspace <span>/</span> <b>{nav.find(n => n.path === location.pathname)?.label || (location.pathname === '/settings' ? 'Settings' : 'Overview')}</b></span></div><div className="top-actions"><button className="icon-btn" aria-label="Notifications"><Bell size={18}/><i className="notification-dot"/></button><button className="icon-btn" aria-label="Toggle theme" onClick={() => setDark(v => !v)}>{dark ? <Sun size={18}/> : <Moon size={18}/>}</button><button className="top-avatar top-avatar-button" title="Account settings" aria-label="Account settings" onClick={()=>navigate('/settings')}>{initials(user.name)}</button></div></header>
+    <main className="main-area"><header className="topbar"><div className="top-left"><button className="icon-btn mobile-menu mobile-only" aria-label="Open menu" onClick={()=>setMenuOpen(true)}><Menu size={20}/></button><span className="breadcrumb">Church workspace <span>/</span> <b>{nav.find(n => n.path === location.pathname)?.label || (location.pathname === '/settings' ? 'Settings' : 'Overview')}</b></span></div><div className="top-actions"><NotificationCenter navigate={navigate}/><button className="icon-btn" aria-label="Toggle theme" onClick={() => setDark(v => !v)}>{dark ? <Sun size={18}/> : <Moon size={18}/>}</button><button className="top-avatar top-avatar-button" title="Account settings" aria-label="Account settings" onClick={()=>navigate('/settings')}>{initials(user.name)}</button></div></header>
       <div className="page-wrap"><Routes><Route path="/" element={<Dashboard user={user}/>}/><Route path="/members" element={<Members user={user}/>}/><Route path="/worship" element={<Worship user={user}/>}/><Route path="/schedules" element={<Schedules user={user}/>}/><Route path="/planning" element={<TeamPlanner user={user}/>}/><Route path="/songs" element={<Songs user={user}/>}/><Route path="/trainings" element={<Trainings user={user}/>}/><Route path="/presenter" element={<Presenter user={user}/>}/><Route path="/activity" element={<ActivityPage/>}/><Route path="/settings" element={<AccountSettings user={user} onUpdate={setUser} onLogout={signOut}/>}/></Routes></div>
       <nav className="mobile-nav">{nav.filter(n=>['/','/members','/worship','/schedules','/songs'].includes(n.path)).map(n => <NavLink key={n.path} to={n.path} end={n.path === '/'} className={({ isActive }) => isActive ? 'mobile-active' : ''}><n.icon size={19}/><span>{n.label.split(' ')[0]}</span></NavLink>)}</nav>
     </main>
@@ -54,6 +54,64 @@ function Field({ label, children, className = '' }) { return <label className={`
 function PageHeader({ eyebrow, title, subtitle, action, children }) { return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="page-heading-actions">{children}{action}</div></div>; }
 function useData(path) { const [data, setData] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const refresh = useCallback(() => { setLoading(true); request(path).then(setData).catch(e => setError(e.message)).finally(() => setLoading(false)); }, [path]); useEffect(() => { refresh(); }, [refresh]); return { data, setData, loading, error, refresh }; }
 function useToast() { const [toast, setToast] = useState(''); const show = text => { setToast(text); setTimeout(() => setToast(''), 3000); }; return [toast, show]; }
+
+function NotificationCenter({ navigate }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [error, setError] = useState('');
+  const rootRef = useRef(null);
+  const refresh = useCallback(async () => {
+    try {
+      const result = await request('/notifications');
+      setItems(result.notifications || []);
+      setUnreadCount(result.unreadCount || 0);
+      setError('');
+    } catch (e) { setError(e.message); }
+  }, []);
+  useEffect(() => {
+    refresh();
+    const timer = setInterval(refresh, 60000);
+    const onFocus = () => refresh();
+    window.addEventListener('focus', onFocus);
+    return () => { clearInterval(timer); window.removeEventListener('focus', onFocus); };
+  }, [refresh]);
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = event => { if (!rootRef.current?.contains(event.target)) setOpen(false); };
+    const onKeyDown = event => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => { document.removeEventListener('pointerdown', onPointerDown); document.removeEventListener('keydown', onKeyDown); };
+  }, [open]);
+  const markAllRead = async () => {
+    try {
+      await request('/notifications/read-all', { method: 'PATCH' });
+      setItems(current => current.map(item => ({ ...item, readAt: item.readAt || new Date().toISOString() })));
+      setUnreadCount(0);
+    } catch (e) { setError(e.message); }
+  };
+  const openNotification = async item => {
+    if (!item.readAt) {
+      try {
+        await request(`/notifications/${item.id}/read`, { method: 'PATCH' });
+        setItems(current => current.map(row => row.id === item.id ? { ...row, readAt: new Date().toISOString() } : row));
+        setUnreadCount(count => Math.max(0, count - 1));
+      } catch (e) { setError(e.message); }
+    }
+    setOpen(false);
+    if (item.link) navigate(item.link);
+  };
+  return <div className="notification-center" ref={rootRef}>
+    <button className="icon-btn notification-trigger" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`} aria-expanded={open} onClick={() => { setOpen(value => !value); if (!open) refresh(); }}>
+      <Bell size={18}/>{unreadCount > 0 && <span className="notification-count">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+    </button>
+    {open && <section className="notification-panel" aria-label="Notifications">
+      <div className="notification-panel-heading"><div><strong>Notifications</strong><small>{unreadCount ? `${unreadCount} unread` : 'You’re all caught up'}</small></div><button className="notification-read-all" onClick={markAllRead} disabled={!unreadCount}><Check size={14}/> Mark all read</button></div>
+      {error ? <p className="notification-empty">{error}</p> : items.length ? <div className="notification-list">{items.map(item => <button className={`notification-item ${item.readAt ? '' : 'unread'}`} key={item.id} onClick={() => openNotification(item)}><span className={`notification-kind notification-kind-${item.kind?.toLowerCase() || 'general'}`}><Bell size={15}/></span><span className="notification-copy"><strong>{item.title}</strong><span>{item.message}</span><small>{new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(item.createdAt))}</small></span>{!item.readAt && <i className="notification-unread-dot"/>}</button>)}</div> : <div className="notification-empty"><Bell size={20}/><strong>No notifications yet</strong><span>Assignments, training reminders, and profile updates will appear here.</span></div>}
+    </section>}
+  </div>;
+}
 function Toast({ children }) { return children ? <div className="toast"><Check size={17}/>{children}</div> : null; }
 function EmptyState({ icon: Icon = CalendarDays, title, copy, action }) { return <div className="empty-state"><div className="empty-icon"><Icon size={22}/></div><strong>{title}</strong><p>{copy}</p>{action}</div>; }
 function Modal({ title, onClose, children, wide = false }) { useEffect(() => { const f = e => e.key === 'Escape' && onClose(); window.addEventListener('keydown', f); return () => window.removeEventListener('keydown', f); }, [onClose]); return <div className="modal-scrim" onMouseDown={e => e.target === e.currentTarget && onClose()}><div className={`modal ${wide ? 'modal-wide' : ''}`}><div className="modal-head"><div><span className="eyebrow">CHURCH WORKSPACE</span><h2>{title}</h2></div><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>{children}</div></div>; }
