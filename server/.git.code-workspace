@@ -1,0 +1,22 @@
+{
+	"folders": [
+		{
+			"path": "../.git"
+		},
+		{
+			"path": "../.runlogs"
+		},
+		{
+			"path": "../.vscode"
+		},
+		{
+			"path": "../client"
+		},
+		{
+			"path": "../node_modules"
+		},
+		{
+			"path": "."
+		}
+	]
+}
