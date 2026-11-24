@@ -37,7 +37,7 @@ app.get('/uploads/:filename', async (req, res, next) => {
 
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const tokenFor = (user) => jwt.sign({ sub: user.id, role: user.role }, jwtSecret, { expiresIn: '12h' });
-const cleanUser = ({ id, name, email, role, emailVerifiedAt, createdAt }) => ({ id, name, email, role, emailVerifiedAt, createdAt });
+const cleanUser = ({ id, name, email, role, photoUrl, emailVerifiedAt, createdAt }) => ({ id, name, email, role, photoUrl, emailVerifiedAt, createdAt });
 function auth(req, res, next) {
   const value = req.headers.authorization?.replace(/^Bearer\s+/i, '');
   if (!value) return res.status(401).json({ error: 'Please sign in to continue.' });
@@ -252,6 +252,21 @@ app.post('/api/auth/email/confirm', auth, async (req, res, next) => {
 
 // Multipart files are restricted by size and MIME; generated names prevent path traversal.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: Number(process.env.MAX_UPLOAD_MB || 10) * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^(image\/(jpeg|png|webp|gif)|application\/pdf|text\/plain)$/.test(file.mimetype)) });
+app.post('/api/auth/profile/photo', auth, upload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file || !req.file.mimetype.startsWith('image/')) return res.status(400).json({ error: 'Choose a JPG, PNG, WebP, or GIF profile picture.' });
+    const filename = `${randomUUID()}${path.extname(req.file.originalname).toLowerCase()}`;
+    const photoUrl = `/uploads/${filename}`;
+    await prisma.uploadedAsset.create({ data: { filename, mimeType: req.file.mimetype, data: req.file.buffer } });
+    const updated = await prisma.user.update({ where: { id: req.user.sub }, data: { photoUrl } });
+    await prisma.$transaction([
+      prisma.member.updateMany({ where: { userId: updated.id }, data: { photoUrl } }),
+      prisma.membershipApplication.updateMany({ where: { userId: updated.id, status: 'PENDING' }, data: { photoUrl } }),
+    ]);
+    await audit(req, 'UPDATE', 'users', updated.id, null, { photoUrl });
+    res.json({ user: cleanUser(updated) });
+  } catch (e) { next(e); }
+});
 app.post('/api/uploads', auth, staff, upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Choose a PNG, JPG, WebP, GIF, PDF, or text file under the size limit.' });
