@@ -151,6 +151,15 @@ model ChordFile {
   song      Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
 }
 
+model UploadedAsset {
+  id        String   @id @default(cuid())
+  filename  String   @unique
+  mimeType  String
+  data      Bytes
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
+
 model Schedule {
   id        String       @id @default(cuid())
   title     String

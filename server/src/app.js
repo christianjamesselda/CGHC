@@ -27,6 +27,13 @@ app.use(cors({ origin: clientUrl, credentials: true }));
 app.use(express.json({ limit: '1mb' }));
 app.use('/uploads', express.static(path.join(serverDir, 'uploads')));
 fs.mkdirSync(path.join(serverDir, 'uploads'), { recursive: true });
+app.get('/uploads/:filename', async (req, res, next) => {
+  try {
+    const asset = await prisma.uploadedAsset.findUnique({ where: { filename: path.basename(req.params.filename) } });
+    if (!asset) return next();
+    res.set('Cache-Control', 'public, max-age=3600').type(asset.mimeType).send(Buffer.from(asset.data));
+  } catch (e) { next(e); }
+});
 
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const tokenFor = (user) => jwt.sign({ sub: user.id, role: user.role }, jwtSecret, { expiresIn: '12h' });
@@ -244,8 +251,15 @@ app.post('/api/auth/email/confirm', auth, async (req, res, next) => {
 });
 
 // Multipart files are restricted by size and MIME; generated names prevent path traversal.
-const upload = multer({ storage: multer.diskStorage({ destination: (_req, _file, cb) => cb(null, path.join(serverDir, 'uploads')), filename: (_req, file, cb) => cb(null, `${randomUUID()}${path.extname(file.originalname).toLowerCase()}`) }), limits: { fileSize: Number(process.env.MAX_UPLOAD_MB || 10) * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^(image\/(jpeg|png|webp|gif)|application\/pdf|text\/plain)$/.test(file.mimetype)) });
-app.post('/api/uploads', auth, staff, upload.single('file'), (req, res) => req.file ? res.status(201).json({ url: `/uploads/${req.file.filename}`, fileName: req.file.originalname, mimeType: req.file.mimetype, size: req.file.size }) : res.status(400).json({ error: 'Choose a PNG, JPG, WebP, GIF, PDF, or text file under the size limit.' }));
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: Number(process.env.MAX_UPLOAD_MB || 10) * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^(image\/(jpeg|png|webp|gif)|application\/pdf|text\/plain)$/.test(file.mimetype)) });
+app.post('/api/uploads', auth, staff, upload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Choose a PNG, JPG, WebP, GIF, PDF, or text file under the size limit.' });
+    const filename = `${randomUUID()}${path.extname(req.file.originalname).toLowerCase()}`;
+    await prisma.uploadedAsset.create({ data: { filename, mimeType: req.file.mimetype, data: req.file.buffer } });
+    res.status(201).json({ url: `/uploads/${filename}`, fileName: req.file.originalname, mimeType: req.file.mimetype, size: req.file.size });
+  } catch (e) { next(e); }
+});
 
 const routes = {
   members: { model: 'member', roles: ['ADMIN', 'LEADER'], include: { ministry: true }, fields: ['firstName', 'lastName', 'age', 'photoUrl', 'instrument', 'ministryId', 'userId'] },
@@ -361,7 +375,7 @@ app.get('/api/presentations/:id', auth, async (req, res, next) => { try { const 
 app.post('/api/presentations/:id/slides', auth, staff, async (req, res, next) => { try { const parent = await prisma.presentation.findUnique({ where: { id: req.params.id } }); if (!parent) return res.status(404).json({ error: 'Presentation not found.' }); const slides = z.object({ slides: z.array(z.object({ type: z.enum(['LYRICS','SCRIPTURE','ANNOUNCEMENT','TEXT']).optional(), text: z.string().max(12000).optional(), background: z.string().max(100).optional(), backgroundUrl: z.string().max(500).optional(), fontFamily: z.string().max(100).optional(), fontSize: z.number().int().min(12).max(100).optional(), textColor: z.string().max(30).optional(), alignment: z.enum(['left','center','right']).optional() })).min(1).max(100) }).parse(req.body).slides; const max = await prisma.slide.aggregate({ where: { presentationId: parent.id }, _max: { position: true } }); const created = await prisma.$transaction(slides.map((slide,i)=>prisma.slide.create({data:{...slide,presentationId:parent.id,position:(max._max.position??-1)+i+1}}))); await audit(req,'CREATE','presentations',parent.id,null,{slides:created}); res.status(201).json(created); } catch(e){next(e);} });
 app.patch('/api/presentations/:id/slides/:slideId', auth, staff, async (req, res, next) => { try { const data=z.object({ type:z.enum(['LYRICS','SCRIPTURE','ANNOUNCEMENT','TEXT']).optional(),text:z.string().max(12000).optional(),background:z.string().max(100).optional(),backgroundUrl:z.string().max(500).optional(),fontFamily:z.string().max(100).optional(),fontSize:z.number().int().min(12).max(100).optional(),textColor:z.string().max(30).optional(),alignment:z.enum(['left','center','right']).optional(),position:z.number().int().nonnegative().optional() }).parse(req.body); const before=await prisma.slide.findFirst({where:{id:req.params.slideId,presentationId:req.params.id}}); if(!before)return res.status(404).json({error:'Slide not found.'}); const slide=await prisma.slide.update({where:{id:before.id},data}); await audit(req,'UPDATE','presentations',before.id,before,slide); res.json(slide); }catch(e){next(e);} });
 app.delete('/api/presentations/:id/slides/:slideId', auth, staff, async (req,res,next)=>{try{const before=await prisma.slide.findFirst({where:{id:req.params.slideId,presentationId:req.params.id}});if(!before)return res.status(404).json({error:'Slide not found.'});await prisma.slide.delete({where:{id:before.id}});await audit(req,'DELETE','presentations',before.id,before,null);res.json({ok:true});}catch(e){next(e);}});
-app.post('/api/chord-files', auth, staff, async (req,res,next)=>{try{const data=z.object({songId:z.string(),fileName:z.string().max(255),filePath:z.string().startsWith('/uploads/'),mimeType:z.string().max(120),size:z.number().int().positive()}).parse(req.body);const file=await prisma.chordFile.create({data});await audit(req,'CREATE','songs',file.songId,null,file);res.status(201).json(file);}catch(e){next(e);}});
+app.post('/api/chord-files', auth, staff, async (req,res,next)=>{try{const data=z.object({songId:z.string(),fileName:z.string().max(255),filePath:z.string().startsWith('/uploads/'),mimeType:z.string().max(120),size:z.number().int().positive()}).parse(req.body);const previous=await prisma.chordFile.findMany({where:{songId:data.songId}});const file=await prisma.$transaction(async tx=>{await tx.chordFile.deleteMany({where:{songId:data.songId}});return tx.chordFile.create({data});});const oldFilenames=previous.map(item=>path.basename(item.filePath));if(oldFilenames.length)await prisma.uploadedAsset.deleteMany({where:{filename:{in:oldFilenames}}});await audit(req,'UPDATE','songs',file.songId,previous,file);res.status(201).json(file);}catch(e){next(e);}});
 app.post('/api/songs/:id/read-chart', auth, chartReadLimiter, async (req, res, next) => {
   try {
     if (!process.env.OPENAI_API_KEY) return res.status(503).json({ error: 'AI chart reading is not configured. Add OPENAI_API_KEY to the server environment.' });
@@ -369,8 +383,11 @@ app.post('/api/songs/:id/read-chart', auth, chartReadLimiter, async (req, res, n
     const file = await prisma.chordFile.findFirst({ where: { id: fileId, songId: req.params.id } });
     if (!file || !file.mimeType.startsWith('image/')) return res.status(404).json({ error: 'Image chart not found for this song.' });
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimeType)) return res.status(400).json({ error: 'AI chart reading supports JPG, PNG, and WebP images.' });
-    const imagePath = path.join(serverDir, 'uploads', path.basename(file.filePath));
-    const imageData = fs.readFileSync(imagePath).toString('base64');
+    const filename = path.basename(file.filePath);
+    const storedImage = await prisma.uploadedAsset.findUnique({ where: { filename } });
+    const imagePath = path.join(serverDir, 'uploads', filename);
+    if (!storedImage && !fs.existsSync(imagePath)) return res.status(410).json({ error: 'This image was lost when the server was redeployed. Upload the song sheet again to restore its preview and download.' });
+    const imageData = storedImage ? Buffer.from(storedImage.data).toString('base64') : fs.readFileSync(imagePath).toString('base64');
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
