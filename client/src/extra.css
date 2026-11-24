@@ -34,3 +34,8 @@
 .image-transpose-tools>.btn{justify-self:start}
 .transposed-sheet-preview{max-height:50vh}
 @media(max-width:560px){.song-row{gap:5px;padding:9px}.song-row-open{gap:6px}.song-row-open .song-row-icon{width:28px;height:28px}.song-row-open .key-chip,.song-row-open .tempo-chip{font-size:7px;padding:4px}.song-download{width:30px;height:30px}.song-detail-download{margin-left:0}.song-detail-meta{gap:6px}.image-transpose-tools .song-image-preview{max-height:40vh}}
+.transposed-chart-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--ink);font-size:11px}
+.transposed-chart-heading span,.chart-read-hint{color:var(--muted);font-size:9px}
+.original-chart-details{padding:10px 12px;border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:10px}
+.original-chart-details summary{cursor:pointer;font-weight:700;color:var(--green)}
+.transpose-controls button:disabled{opacity:.4;cursor:not-allowed}
