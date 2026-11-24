@@ -412,17 +412,9 @@ app.post('/api/songs/:id/read-chart', auth, chartReadLimiter, async (req, res, n
         model: visionModel,
         max_output_tokens: 12000,
         input: [{ role: 'user', content: [
-          { type: 'input_text', text: 'Transcribe this chord sheet accurately. Copy every chord exactly, including sharps, flats, minor suffixes, slash chords, and repeat marks. Include all section headings and lyrics. Keep chord lines above lyric lines and preserve spaces where possible. If the page has columns, read the left column top to bottom before the right column. Do not invent, correct, simplify, or transpose anything. In chords, also give one tight bounding box per printed chord label using x, y, width, and height normalized from 0 to 1000 relative to the original image, with (0,0) at the top-left. Boxes must cover the chord label only, not the lyric or the whole line. Include every chord occurrence. Return the transcription and chord positions in the required JSON format.' },
+          { type: 'input_text', text: 'Transcribe this chord sheet accurately. Copy every chord exactly, including sharps, flats, minor suffixes, slash chords, and repeat marks. Include all section headings and lyrics, keeping chords above lyric lines and preserving chord spacing. Keep the original reading order: left column top to bottom, then right column top to bottom. Put the exact marker [[COLUMN_BREAK]] on its own line between the columns. If the source has one column, do not add the marker. Do not invent, correct, simplify, or transpose anything. Return plain text only.' },
           { type: 'input_image', image_url: `data:${file.mimeType};base64,${imageData}`, detail: 'high' },
         ] }],
-        text: { format: { type: 'json_schema', name: 'chord_sheet_layout', strict: true, schema: {
-          type: 'object', additionalProperties: false, required: ['chartText', 'chords'], properties: {
-            chartText: { type: 'string' },
-            chords: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['text', 'x', 'y', 'width', 'height'], properties: {
-              text: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' },
-            } } },
-          },
-        } } },
       }),
     });
     const result = await response.json().catch(() => ({}));
@@ -442,13 +434,10 @@ app.post('/api/songs/:id/read-chart', auth, chartReadLimiter, async (req, res, n
     }
     const outputText = result.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n').trim();
     if (!outputText) return res.status(502).json({ error: 'OpenAI accepted the image but returned no chart transcription. Check vision model access and try again.' });
-    let chart;
-    try { chart = JSON.parse(outputText); } catch { return res.status(502).json({ error: 'The AI returned an invalid chart layout. Please try reading the image again.' }); }
-    const chartText = z.string().min(1).max(30000).parse(chart.chartText).trim();
-    const chords = z.array(z.object({ text: z.string().min(1).max(24), x: z.number(), y: z.number(), width: z.number().positive(), height: z.number().positive() })).max(1000).parse(chart.chords)
-      .filter(box => box.x >= 0 && box.y >= 0 && box.x <= 1000 && box.y <= 1000 && box.width <= 1000 && box.height <= 1000);
-    await prisma.chordFile.update({ where: { id: file.id }, data: { recognizedText: chartText, recognizedChords: chords } });
-    res.json({ chartText, chords });
+    const chartText = outputText.replace(/^```(?:text)?\s*/i, '').replace(/\s*```$/, '').trim();
+    if (!chartText) return res.status(502).json({ error: 'The AI returned an empty chart transcription. Please try reading the image again.' });
+    await prisma.chordFile.update({ where: { id: file.id }, data: { recognizedText: chartText } });
+    res.json({ chartText });
   } catch (e) {
     if (e.name === 'TimeoutError' || e.name === 'AbortError') return res.status(504).json({ error: 'AI chart reading took too long. Please try again.' });
     next(e);
