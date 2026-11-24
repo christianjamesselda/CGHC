@@ -50,3 +50,12 @@
  .transpose-controls>.icon-btn{width:34px;height:34px;flex:none}
  .transpose-controls>.btn{height:34px;padding:0 9px;white-space:nowrap}
 }
+@media(max-width:560px){
+ .upcoming-item{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:8px}
+ .upcoming-item .date-block{width:42px}
+ .upcoming-info{min-width:0;overflow:hidden}
+ .upcoming-info strong{display:block;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+ .upcoming-info small{display:block;min-width:0;line-height:1.5;overflow-wrap:anywhere}
+ .upcoming-info small svg{vertical-align:-2px;flex:none}
+ .upcoming-item>.badge{justify-self:end;padding:4px 6px;font-size:7px}
+}
