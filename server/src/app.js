@@ -41,8 +41,18 @@ const cleanUser = ({ id, name, email, role, photoUrl, emailVerifiedAt, createdAt
 function auth(req, res, next) {
   const value = req.headers.authorization?.replace(/^Bearer\s+/i, '');
   if (!value) return res.status(401).json({ error: 'Please sign in to continue.' });
-  try { req.user = jwt.verify(value, jwtSecret); next(); }
+  let tokenUser;
+  try { tokenUser = jwt.verify(value, jwtSecret); }
   catch { return res.status(401).json({ error: 'Your session expired. Please sign in again.' }); }
+  // Roles can be changed by an administrator while a user is already signed in.
+  // Read the current role so promotions and demotions take effect immediately.
+  prisma.user.findUnique({ where: { id: tokenUser.sub }, select: { id: true, role: true } })
+    .then((account) => {
+      if (!account) return res.status(401).json({ error: 'This account is no longer available.' });
+      req.user = { ...tokenUser, role: account.role };
+      next();
+    })
+    .catch(next);
 }
 const allow = (...roles) => (req, res, next) => req.user && roles.includes(req.user.role) ? next() : res.status(403).json({ error: 'You do not have permission to do that.' });
 const staff = allow('ADMIN', 'LEADER');
