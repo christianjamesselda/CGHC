@@ -149,6 +149,7 @@ model ChordFile {
   mimeType  String
   size      Int
   recognizedText String?
+  recognizedChords Json?
   createdAt DateTime @default(now())
   song      Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
 }
