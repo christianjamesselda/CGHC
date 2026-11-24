@@ -1,4 +1,4 @@
-﻿ALTER TABLE "EmailVerification" ADD COLUMN "pendingEmail" TEXT;
+ALTER TABLE "EmailVerification" ADD COLUMN "pendingEmail" TEXT;
 CREATE TABLE "MembershipApplication" (
   "id" TEXT NOT NULL,
   "userId" TEXT NOT NULL,
