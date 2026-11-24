@@ -7,3 +7,19 @@
 .top-avatar-button{border:0;padding:0;cursor:pointer}.top-avatar-button:hover{box-shadow:0 0 0 3px var(--green-soft)}.account-signout{display:flex;align-items:center;gap:12px;margin-top:14px;padding:15px 17px}.account-signout-icon{height:35px;width:35px;border-radius:10px;background:#f9eeeb;color:#b8675b;display:grid;place-items:center}.account-signout-copy{display:grid;gap:4px;flex:1}.account-signout-copy strong{font-size:10px}.account-signout-copy span{font-size:8px;color:var(--muted)}.account-signout .btn{color:#a8584d;border-color:#f0dcd8}
 @media(max-width:560px){.account-signout{align-items:flex-start;flex-wrap:wrap}.account-signout-copy{min-width:calc(100% - 55px)}.account-signout .btn{margin-left:47px}}
 .account-settings-root .settings-grid>section:first-child .settings-divider,.account-settings-root .settings-grid>section:first-child .settings-divider~.field{display:none}.password-change-panel{margin-top:14px}.password-change-form{max-width:430px}.password-change-form .password-help{font-size:8px;color:var(--muted);margin-top:-7px}.password-change-form .alert{margin:0}.password-change-form .btn{justify-self:start}
+@media(max-width:560px){
+ .schedule-tools{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;align-items:stretch}
+ .schedule-tools .month-switch{grid-column:1/-1;justify-content:center;min-height:34px}
+ .schedule-tools .month-switch strong{flex:1;text-align:center;font-size:14px}
+ .schedule-tools .filter-pills{grid-column:1/-1;order:initial;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;gap:2px}
+ .schedule-tools .filter-pills button{min-width:0;padding:9px 2px;font-size:10px;white-space:nowrap}
+ .schedule-tools .view-switch{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;width:100%;margin:0}
+ .schedule-tools .view-switch button{justify-content:center;min-height:38px;font-size:11px}
+ .schedule-card{align-items:flex-start}
+ .schedule-title-row{flex-wrap:wrap}
+ .schedule-title-row h3{font-size:12px;line-height:1.4}
+ .schedule-main p{font-size:10px;line-height:1.5}
+ .schedule-sub{font-size:10px}
+ .user-row .btn{padding:0 7px;font-size:8px}
+}
+.song-image-preview{display:block;width:100%;max-height:62vh;object-fit:contain;background:#f5f7f5;border:1px solid var(--line);border-radius:9px;margin:8px 0}

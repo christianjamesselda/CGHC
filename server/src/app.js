@@ -84,8 +84,8 @@ if (resendApiKey) {
 }
 class EmailDeliveryError extends Error {}
 async function sendCode(email, code, purpose) {
-  const subject = purpose === 'RESET_PASSWORD' ? 'Your password reset code' : 'Verify your Cornerstone church account';
-  const title = purpose === 'RESET_PASSWORD' ? 'Reset your password' : 'Verify your email address';
+  const subject = purpose === 'RESET_PASSWORD' ? 'Your password reset code' : purpose === 'CHANGE_EMAIL' ? 'Confirm your new email address' : 'Verify your Cornerstone church account';
+  const title = purpose === 'RESET_PASSWORD' ? 'Reset your password' : purpose === 'CHANGE_EMAIL' ? 'Confirm your new email address' : 'Verify your email address';
   const text = `${title}\n\nYour 6-digit code is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email.`;
   const html = `<div style="font-family:Arial,sans-serif;color:#24332b;line-height:1.6"><h2>${title}</h2><p>Enter this code in the Cornerstone church website:</p><p style="font-size:28px;font-weight:700;letter-spacing:8px;color:#17614b">${code}</p><p>This code expires in 10 minutes. If you did not request it, you can ignore this email.</p></div>`;
   if (resendApiKey) {
@@ -215,6 +215,33 @@ app.patch('/api/auth/profile', auth, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+app.post('/api/auth/email/change-request', auth, async (req, res, next) => {
+  try {
+    const data = z.object({ email: z.string().trim().email().max(255).transform(v => v.toLowerCase()), currentPassword: z.string().min(1) }).parse(req.body);
+    const user = await prisma.user.findUnique({ where: { id: req.user.sub } });
+    if (!await bcrypt.compare(data.currentPassword, user.passwordHash)) return res.status(400).json({ error: 'Current password is incorrect.' });
+    if (data.email === user.email) return res.status(400).json({ error: 'Choose a different email address.' });
+    if (await prisma.user.findUnique({ where: { email: data.email } })) return res.status(409).json({ error: 'That email address is already in use.' });
+    if (!resendApiKey && !mailer) return res.status(503).json({ error: 'Email delivery is not configured.' });
+    const code = String(randomInt(100000, 1000000));
+    await prisma.emailVerification.create({ data: { userId: user.id, purpose: 'CHANGE_EMAIL', pendingEmail: data.email, codeHash: hash(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) } });
+    await sendCode(data.email, code, 'CHANGE_EMAIL');
+    res.json({ message: 'A confirmation code was sent to your new email address.' });
+  } catch (e) { next(e); }
+});
+app.post('/api/auth/email/confirm', auth, async (req, res, next) => {
+  try {
+    const data = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
+    const entry = await prisma.emailVerification.findFirst({ where: { userId: req.user.sub, purpose: 'CHANGE_EMAIL', consumedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } });
+    if (!entry || entry.codeHash !== hash(data.code)) return res.status(400).json({ error: 'That code is invalid or expired.' });
+    const existing = await prisma.user.findUnique({ where: { email: entry.pendingEmail } });
+    if (existing && existing.id !== req.user.sub) return res.status(409).json({ error: 'That email address is already in use.' });
+    const updated = await prisma.user.update({ where: { id: req.user.sub }, data: { email: entry.pendingEmail, emailVerifiedAt: new Date() } });
+    await prisma.emailVerification.update({ where: { id: entry.id }, data: { consumedAt: new Date() } });
+    res.json({ user: cleanUser(updated), message: 'Your email address has been updated.' });
+  } catch (e) { next(e); }
+});
+
 // Multipart files are restricted by size and MIME; generated names prevent path traversal.
 const upload = multer({ storage: multer.diskStorage({ destination: (_req, _file, cb) => cb(null, path.join(serverDir, 'uploads')), filename: (_req, file, cb) => cb(null, `${randomUUID()}${path.extname(file.originalname).toLowerCase()}`) }), limits: { fileSize: Number(process.env.MAX_UPLOAD_MB || 10) * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^(image\/(jpeg|png|webp|gif)|application\/pdf|text\/plain)$/.test(file.mimetype)) });
 app.post('/api/uploads', auth, staff, upload.single('file'), (req, res) => req.file ? res.status(201).json({ url: `/uploads/${req.file.filename}`, fileName: req.file.originalname, mimeType: req.file.mimetype, size: req.file.size }) : res.status(400).json({ error: 'Choose a PNG, JPG, WebP, GIF, PDF, or text file under the size limit.' }));
@@ -230,6 +257,41 @@ const routes = {
   attendance: { model: 'attendance', roles: ['ADMIN', 'LEADER'], include: { member: true, training: { include: { schedule: true } } }, fields: ['trainingId', 'memberId', 'status', 'notes'] },
 };
 app.use('/api', auth);
+app.get('/api/membership-application', async (req, res, next) => {
+  try {
+    if (req.user.role === 'ADMIN') {
+      const rows = await prisma.membershipApplication.findMany({ include: { user: { select: { id: true, name: true, email: true, role: true } } }, orderBy: { createdAt: 'asc' } });
+      return res.json({ applications: rows });
+    }
+    const application = await prisma.membershipApplication.findUnique({ where: { userId: req.user.sub } });
+    const member = await prisma.member.findUnique({ where: { userId: req.user.sub } });
+    res.json({ application, member });
+  } catch (e) { next(e); }
+});
+app.post('/api/membership-application', async (req, res, next) => {
+  try {
+    const data = z.object({ firstName: z.string().trim().min(1).max(80), lastName: z.string().trim().min(1).max(80), age: z.coerce.number().int().min(1).max(120).optional(), instrument: z.string().max(80).optional(), photoUrl: z.string().max(500).optional() }).parse(req.body);
+    if (await prisma.member.findUnique({ where: { userId: req.user.sub } })) return res.status(409).json({ error: 'You are already an approved member.' });
+    const application = await prisma.membershipApplication.upsert({ where: { userId: req.user.sub }, create: { ...data, userId: req.user.sub }, update: { ...data, status: 'PENDING' } });
+    await prisma.notification.createMany({ data: (await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } })).map(({ id }) => ({ userId: id, title: 'Membership request', message: `${data.firstName} ${data.lastName} requested to join the church directory.`, kind: 'PROFILE', link: '/settings' })) });
+    res.status(201).json({ application, message: 'Your request was sent to an administrator for approval.' });
+  } catch (e) { next(e); }
+});
+app.patch('/api/membership-application/:id', allow('ADMIN'), async (req, res, next) => {
+  try {
+    const { decision } = z.object({ decision: z.enum(['APPROVE', 'REJECT']) }).parse(req.body);
+    const appRequest = await prisma.membershipApplication.findUnique({ where: { id: req.params.id } });
+    if (!appRequest || appRequest.status !== 'PENDING') return res.status(404).json({ error: 'Pending request not found.' });
+    if (decision === 'APPROVE') {
+      await prisma.$transaction([prisma.member.create({ data: { userId: appRequest.userId, firstName: appRequest.firstName, lastName: appRequest.lastName, age: appRequest.age, instrument: appRequest.instrument, photoUrl: appRequest.photoUrl } }), prisma.membershipApplication.update({ where: { id: appRequest.id }, data: { status: 'APPROVED' } })]);
+      await prisma.notification.create({ data: { userId: appRequest.userId, title: 'You are now a church member', message: 'Your membership request was approved. Your profile is now in the church directory.', kind: 'PROFILE', link: '/members' } });
+    } else {
+      await prisma.membershipApplication.update({ where: { id: appRequest.id }, data: { status: 'REJECTED' } });
+      await prisma.notification.create({ data: { userId: appRequest.userId, title: 'Membership request update', message: 'Your membership request was not approved. You can update your details and apply again in Settings.', kind: 'PROFILE', link: '/settings' } });
+    }
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
 app.get('/api/notifications', async (req, res, next) => {
   try {
     const account = await prisma.user.findUnique({ where: { id: req.user.sub }, select: { member: { select: { id: true, ministryId: true } } } });
