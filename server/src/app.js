@@ -403,25 +403,37 @@ app.post('/api/songs/:id/read-chart', auth, chartReadLimiter, async (req, res, n
     const imagePath = path.join(serverDir, 'uploads', filename);
     if (!storedImage && !fs.existsSync(imagePath)) return res.status(410).json({ error: 'This image was lost when the server was redeployed. Upload the song sheet again to restore its preview and download.' });
     const imageData = storedImage ? Buffer.from(storedImage.data).toString('base64') : fs.readFileSync(imagePath).toString('base64');
+    const visionModel = process.env.OPENAI_VISION_MODEL && process.env.OPENAI_VISION_MODEL !== 'gpt-4.1-mini' ? process.env.OPENAI_VISION_MODEL : 'gpt-6-luna';
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(90000),
       body: JSON.stringify({
-        model: process.env.OPENAI_VISION_MODEL || 'gpt-4.1-mini',
+        model: visionModel,
+        max_output_tokens: 12000,
         input: [{ role: 'user', content: [
-          { type: 'input_text', text: 'Read this song chord chart image and transcribe all visible section labels, chord names, lyrics, and repeat notes in their original order. Preserve chord placement above lyrics using separate lines and spaces where possible. Do not transpose or rewrite the song. Return only the chart text. If a character is unreadable, use [?].' },
+          { type: 'input_text', text: 'Transcribe this chord sheet accurately. Copy every chord exactly, including sharps, flats, minor suffixes, slash chords, and repeat marks. Include all section headings and lyrics. Keep chord lines above lyric lines and preserve spaces where possible. If the page has columns, read the left column top to bottom before the right column. Do not invent, correct, simplify, or transpose anything. Mark only genuinely unreadable characters as [UNCLEAR] and continue. Return plain chart text only.' },
           { type: 'input_image', image_url: `data:${file.mimeType};base64,${imageData}`, detail: 'high' },
         ] }],
       }),
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      console.error('OpenAI chart reading failed:', response.status, result.error?.message || 'No provider detail');
-      return res.status(502).json({ error: 'The AI could not read this chart. Try a clearer JPG, PNG, or WebP image.' });
+      const providerError = result.error || {};
+      const providerMessage = String(providerError.message || 'No provider detail');
+      console.error('OpenAI chart reading failed:', response.status, providerError.type || '', providerError.code || '', providerMessage);
+      const code = String(providerError.code || '').toLowerCase();
+      let message = 'OpenAI could not process this chart image.';
+      if (response.status === 401 || response.status === 403) message = 'OpenAI rejected the API key. Check that Render has the full secret key in OPENAI_API_KEY and that it has API access.';
+      else if (/quota|billing|credit|hard_limit/.test(code + ' ' + providerMessage.toLowerCase())) message = 'The OpenAI API account has no available credits. Add API billing or credits, then try again.';
+      else if (response.status === 429) message = 'The OpenAI API rate limit was reached. Wait a minute and try again.';
+      else if (response.status === 404 || /model.*not found|does not exist/i.test(providerMessage)) message = `The OpenAI vision model is unavailable for this key (${visionModel}). Check model access in the OpenAI project or set OPENAI_VISION_MODEL to an enabled image model.`;
+      else if (response.status === 400 || response.status === 413) message = `OpenAI rejected the image request (${providerMessage.slice(0, 180)}). JPG, PNG, or WebP images up to 10 MB are supported.`;
+      else if (response.status >= 500) message = 'OpenAI is temporarily unavailable. Please try the chart again in a moment.';
+      return res.status(502).json({ error: message });
     }
     const chartText = result.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n').trim();
-    if (!chartText) return res.status(502).json({ error: 'The AI did not return readable chart text. Try a clearer image.' });
+    if (!chartText) return res.status(502).json({ error: 'OpenAI accepted the image but returned no chart text. Check vision model access in the OpenAI project and try again.' });
     await prisma.chordFile.update({ where: { id: file.id }, data: { recognizedText: chartText } });
     res.json({ chartText });
   } catch (e) {
