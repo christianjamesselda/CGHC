@@ -422,6 +422,7 @@ app.post('/api/songs/:id/read-chart', auth, chartReadLimiter, async (req, res, n
     }
     const chartText = result.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n').trim();
     if (!chartText) return res.status(502).json({ error: 'The AI did not return readable chart text. Try a clearer image.' });
+    await prisma.chordFile.update({ where: { id: file.id }, data: { recognizedText: chartText } });
     res.json({ chartText });
   } catch (e) {
     if (e.name === 'TimeoutError' || e.name === 'AbortError') return res.status(504).json({ error: 'AI chart reading took too long. Please try again.' });
