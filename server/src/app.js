@@ -258,10 +258,30 @@ app.post('/api/auth/profile/photo', auth, upload.single('file'), async (req, res
     const filename = `${randomUUID()}${path.extname(req.file.originalname).toLowerCase()}`;
     const photoUrl = `/uploads/${filename}`;
     await prisma.uploadedAsset.create({ data: { filename, mimeType: req.file.mimetype, data: req.file.buffer } });
-    const updated = await prisma.user.update({ where: { id: req.user.sub }, data: { photoUrl } });
+    const account = await prisma.user.findUnique({ where: { id: req.user.sub }, include: { member: true, membershipApplication: true } });
+    if (!account) return res.status(404).json({ error: 'Account not found.' });
+    const updated = await prisma.user.update({ where: { id: account.id }, data: { photoUrl } });
+    let member = account.member;
+    // Older member profiles may have been created manually and left unlinked.
+    // Link only when this account's name matches one unique, unclaimed roster entry.
+    if (!member) {
+      const [firstName, ...lastParts] = (account.membershipApplication?.firstName && account.membershipApplication?.lastName
+        ? [account.membershipApplication.firstName, account.membershipApplication.lastName]
+        : account.name.trim().split(/\s+/));
+      const lastName = account.membershipApplication?.lastName || lastParts.join(' ');
+      if (firstName && lastName) {
+        const matches = await prisma.member.findMany({
+          where: { userId: null, firstName: { equals: firstName, mode: 'insensitive' }, lastName: { equals: lastName, mode: 'insensitive' } },
+          select: { id: true }, take: 2,
+        });
+        if (matches.length === 1) {
+          member = await prisma.member.update({ where: { id: matches[0].id, userId: null }, data: { userId: account.id, photoUrl } });
+        }
+      }
+    }
     await prisma.$transaction([
-      prisma.member.updateMany({ where: { userId: updated.id }, data: { photoUrl } }),
-      prisma.membershipApplication.updateMany({ where: { userId: updated.id, status: 'PENDING' }, data: { photoUrl } }),
+      ...(member ? [prisma.member.update({ where: { id: member.id }, data: { photoUrl } })] : []),
+      prisma.membershipApplication.updateMany({ where: { userId: updated.id }, data: { photoUrl } }),
     ]);
     await audit(req, 'UPDATE', 'users', updated.id, null, { photoUrl });
     res.json({ user: cleanUser(updated) });

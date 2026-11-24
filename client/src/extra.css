@@ -42,3 +42,11 @@
 .original-chart-details{padding:10px 12px;border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:10px}
 .original-chart-details summary{cursor:pointer;font-weight:700;color:var(--green)}
 .transpose-controls button:disabled{opacity:.4;cursor:not-allowed}
+@media(max-width:560px){
+ .chord-toolbar{align-items:flex-start;flex-direction:column;gap:8px}
+ .transpose-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;padding:6px 9px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+ .transpose-controls>span{font-size:10px;white-space:nowrap}
+ .transpose-controls>strong{min-width:25px;text-align:center;font-size:12px}
+ .transpose-controls>.icon-btn{width:34px;height:34px;flex:none}
+ .transpose-controls>.btn{height:34px;padding:0 9px;white-space:nowrap}
+}
