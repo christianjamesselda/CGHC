@@ -120,6 +120,7 @@ async function sendCode(email, code, purpose) {
 }
 const codeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many code requests. Please try again later.' } });
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many sign-in attempts. Please try again later.' } });
+const chartReadLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many chart reads. Please try again later.' } });
 const authSchema = z.object({ name: z.string().trim().min(2).max(100).optional(), email: z.string().trim().email().max(255).transform((v) => v.toLowerCase()), password: z.string().min(8).max(100) });
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, church: process.env.CHURCH_NAME || 'Cornerstone Global Harvest Church' }));
@@ -361,6 +362,40 @@ app.post('/api/presentations/:id/slides', auth, staff, async (req, res, next) =>
 app.patch('/api/presentations/:id/slides/:slideId', auth, staff, async (req, res, next) => { try { const data=z.object({ type:z.enum(['LYRICS','SCRIPTURE','ANNOUNCEMENT','TEXT']).optional(),text:z.string().max(12000).optional(),background:z.string().max(100).optional(),backgroundUrl:z.string().max(500).optional(),fontFamily:z.string().max(100).optional(),fontSize:z.number().int().min(12).max(100).optional(),textColor:z.string().max(30).optional(),alignment:z.enum(['left','center','right']).optional(),position:z.number().int().nonnegative().optional() }).parse(req.body); const before=await prisma.slide.findFirst({where:{id:req.params.slideId,presentationId:req.params.id}}); if(!before)return res.status(404).json({error:'Slide not found.'}); const slide=await prisma.slide.update({where:{id:before.id},data}); await audit(req,'UPDATE','presentations',before.id,before,slide); res.json(slide); }catch(e){next(e);} });
 app.delete('/api/presentations/:id/slides/:slideId', auth, staff, async (req,res,next)=>{try{const before=await prisma.slide.findFirst({where:{id:req.params.slideId,presentationId:req.params.id}});if(!before)return res.status(404).json({error:'Slide not found.'});await prisma.slide.delete({where:{id:before.id}});await audit(req,'DELETE','presentations',before.id,before,null);res.json({ok:true});}catch(e){next(e);}});
 app.post('/api/chord-files', auth, staff, async (req,res,next)=>{try{const data=z.object({songId:z.string(),fileName:z.string().max(255),filePath:z.string().startsWith('/uploads/'),mimeType:z.string().max(120),size:z.number().int().positive()}).parse(req.body);const file=await prisma.chordFile.create({data});await audit(req,'CREATE','songs',file.songId,null,file);res.status(201).json(file);}catch(e){next(e);}});
+app.post('/api/songs/:id/read-chart', auth, chartReadLimiter, async (req, res, next) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) return res.status(503).json({ error: 'AI chart reading is not configured. Add OPENAI_API_KEY to the server environment.' });
+    const { fileId } = z.object({ fileId: z.string().min(1) }).parse(req.body);
+    const file = await prisma.chordFile.findFirst({ where: { id: fileId, songId: req.params.id } });
+    if (!file || !file.mimeType.startsWith('image/')) return res.status(404).json({ error: 'Image chart not found for this song.' });
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimeType)) return res.status(400).json({ error: 'AI chart reading supports JPG, PNG, and WebP images.' });
+    const imagePath = path.join(serverDir, 'uploads', path.basename(file.filePath));
+    const imageData = fs.readFileSync(imagePath).toString('base64');
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(90000),
+      body: JSON.stringify({
+        model: process.env.OPENAI_VISION_MODEL || 'gpt-4.1-mini',
+        input: [{ role: 'user', content: [
+          { type: 'input_text', text: 'Read this song chord chart image and transcribe all visible section labels, chord names, lyrics, and repeat notes in their original order. Preserve chord placement above lyrics using separate lines and spaces where possible. Do not transpose or rewrite the song. Return only the chart text. If a character is unreadable, use [?].' },
+          { type: 'input_image', image_url: `data:${file.mimeType};base64,${imageData}`, detail: 'high' },
+        ] }],
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error('OpenAI chart reading failed:', response.status, result.error?.message || 'No provider detail');
+      return res.status(502).json({ error: 'The AI could not read this chart. Try a clearer JPG, PNG, or WebP image.' });
+    }
+    const chartText = result.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n').trim();
+    if (!chartText) return res.status(502).json({ error: 'The AI did not return readable chart text. Try a clearer image.' });
+    res.json({ chartText });
+  } catch (e) {
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') return res.status(504).json({ error: 'AI chart reading took too long. Please try again.' });
+    next(e);
+  }
+});
 app.post('/api/services/:serviceId/assignments', auth, staff, async (req,res,next)=>{try{const data=z.object({memberId:z.string(),role:z.string().trim().min(1).max(80),slot:z.number().int().positive().default(1)}).parse(req.body);const item=await prisma.serviceAssignment.create({data:{...data,serviceId:req.params.serviceId},include:{member:true,service:{include:{schedule:true}}}});const {service,member}=item;if(member.userId){try{await prisma.notification.create({data:{userId:member.userId,title:'New service assignment',message:`You are assigned as ${item.role} for ${service.schedule.title} · ${service.name} on ${new Intl.DateTimeFormat('en',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'Asia/Manila'}).format(service.startsAt)}.`,kind:'SERVICE',link:'/planning',sourceKey:`service-assignment:${item.id}`}});}catch(notificationError){console.error('Could not create service assignment notification:',notificationError.message);}}await audit(req,'CREATE','schedules',item.id,null,item);res.status(201).json(item);}catch(e){next(e);}});
 app.delete('/api/assignments/:id', auth, staff, async (req,res,next)=>{try{const before=await prisma.serviceAssignment.findUnique({where:{id:req.params.id},include:{member:true,service:{include:{schedule:true}}}});if(!before)return res.status(404).json({error:'Assignment not found.'});await prisma.serviceAssignment.delete({where:{id:before.id}});if(before.member.userId){try{await prisma.notification.create({data:{userId:before.member.userId,title:'Service assignment updated',message:`Your ${before.role} assignment for ${before.service.schedule.title} · ${before.service.name} was removed.`,kind:'SERVICE',link:'/planning',sourceKey:`service-assignment-removed:${before.id}`}});}catch(notificationError){console.error('Could not create assignment removal notification:',notificationError.message);}}await audit(req,'DELETE','schedules',before.id,before,null);res.json({ok:true});}catch(e){next(e);}});
 

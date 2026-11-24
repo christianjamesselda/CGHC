@@ -39,3 +39,7 @@ services:
         sync: false
       - key: MAX_UPLOAD_MB
         value: "10"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_VISION_MODEL
+        value: gpt-4.1-mini
