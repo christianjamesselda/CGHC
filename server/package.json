@@ -8,6 +8,7 @@
     "start": "node src/app.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
+    "db:resolve-membership-email": "prisma migrate resolve --rolled-back 202611240002_membership_email",
     "db:seed": "prisma db seed"
   },
   "prisma": { "seed": "node prisma/seed.js" },

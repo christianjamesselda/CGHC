@@ -39,9 +39,22 @@ function run(command, args, { capture = false } = {}) {
 }
 
 let migrationResult;
+let failedMembershipMigrationResolved = false;
 for (let attempt = 1; attempt <= 4; attempt += 1) {
   migrationResult = await run(npm, ['run', 'db:migrate'], { capture: true });
   if (migrationResult.code === 0) break;
+
+  const failedMembershipMigration = /P3009/.test(migrationResult.output)
+    && /202611240002_membership_email/.test(migrationResult.output)
+    && /failed/i.test(migrationResult.output);
+  if (failedMembershipMigration && !failedMembershipMigrationResolved) {
+    console.warn('A previous run failed before the membership migration could execute. Marking that migration rolled back and retrying.');
+    const resolutionResult = await run(npm, ['run', 'db:resolve-membership-email'], { capture: true });
+    if (resolutionResult.code !== 0) process.exit(resolutionResult.code);
+    failedMembershipMigrationResolved = true;
+    attempt -= 1;
+    continue;
+  }
 
   const timedOut = /P1002|timed out/i.test(migrationResult.output);
   if (!timedOut || attempt === 4) process.exit(migrationResult.code);
