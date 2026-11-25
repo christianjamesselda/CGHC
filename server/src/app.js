@@ -375,6 +375,25 @@ app.get('/api/notifications', async (req, res, next) => {
     res.json({ notifications, unreadCount });
   } catch (e) { next(e); }
 });
+app.get('/api/my-commitments', async (req, res, next) => {
+  try {
+    const member = await prisma.member.findUnique({ where: { userId: req.user.sub }, select: { id: true } });
+    if (!member) return res.json([]);
+    const assignments = await prisma.serviceAssignment.findMany({
+      where: { memberId: member.id, service: { startsAt: { gte: new Date() } } },
+      include: { service: { include: { schedule: true } } },
+      orderBy: { service: { startsAt: 'asc' } },
+    });
+    const trainings = await prisma.training.findMany({
+      where: { ministry: { members: { some: { id: member.id } } }, schedule: { startsAt: { gte: new Date() } } },
+      include: { schedule: true }, orderBy: { schedule: { startsAt: 'asc' } },
+    });
+    res.json([
+      ...assignments.map(({ id, role, service }) => ({ id, title: service.schedule.title, type: 'SERVICE', role, serviceName: service.name, startsAt: service.startsAt, location: service.schedule.location, details: service.schedule.details })),
+      ...trainings.map(({ id, schedule }) => ({ id: `training-${id}`, title: schedule.title, type: 'TRAINING', role: 'Training', startsAt: schedule.startsAt, location: schedule.location, details: schedule.details })),
+    ].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt)));
+  } catch (e) { next(e); }
+});
 app.patch('/api/notifications/read-all', async (req, res, next) => {
   try {
     await prisma.notification.updateMany({ where: { userId: req.user.sub, readAt: null }, data: { readAt: new Date() } });
