@@ -378,7 +378,7 @@ app.get('/api/notifications', async (req, res, next) => {
 app.get('/api/lineups', async (_req, res, next) => {
   try {
     const rows = await prisma.worshipLineup.findMany({
-      include: { submittedBy: { select: { id: true, name: true } }, songs: { orderBy: [{ category: 'asc' }, { position: 'asc' }] } },
+      include: { submittedBy: { select: { id: true, name: true, role: true } }, songs: { orderBy: [{ category: 'asc' }, { position: 'asc' }] } },
       orderBy: [{ serviceDate: 'desc' }, { submittedAt: 'desc' }], take: 500,
     });
     res.json(rows);
@@ -395,7 +395,7 @@ app.post('/api/lineups', staff, async (req, res, next) => {
     if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== data.serviceDate) return res.status(400).json({ error: 'Choose a valid service date.' });
     const created = await prisma.worshipLineup.create({
       data: { serviceDate: date, serviceName: data.serviceName, submittedById: req.user.sub, songs: { create: data.songs.map((song, position) => ({ ...song, position })) } },
-      include: { submittedBy: { select: { id: true, name: true } }, songs: { orderBy: [{ category: 'asc' }, { position: 'asc' }] } },
+      include: { submittedBy: { select: { id: true, name: true, role: true } }, songs: { orderBy: [{ category: 'asc' }, { position: 'asc' }] } },
     });
     await audit(req, 'CREATE', 'lineups', created.id, null, created);
     res.status(201).json(created);
