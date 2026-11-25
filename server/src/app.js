@@ -375,6 +375,42 @@ app.get('/api/notifications', async (req, res, next) => {
     res.json({ notifications, unreadCount });
   } catch (e) { next(e); }
 });
+app.get('/api/lineups', async (_req, res, next) => {
+  try {
+    const rows = await prisma.worshipLineup.findMany({
+      include: { submittedBy: { select: { id: true, name: true } }, songs: { orderBy: [{ category: 'asc' }, { position: 'asc' }] } },
+      orderBy: [{ serviceDate: 'desc' }, { submittedAt: 'desc' }], take: 500,
+    });
+    res.json(rows);
+  } catch (e) { next(e); }
+});
+app.post('/api/lineups', staff, async (req, res, next) => {
+  try {
+    const data = z.object({
+      serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      serviceName: z.enum(['1st Service', '2nd Service', 'Youth Service']),
+      songs: z.array(z.object({ category: z.enum(['PRAISE', 'WORSHIP']), title: z.string().trim().min(1).max(180), url: z.string().url().max(1000) })).min(1).max(30),
+    }).parse(req.body);
+    const date = new Date(`${data.serviceDate}T00:00:00.000Z`);
+    if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== data.serviceDate) return res.status(400).json({ error: 'Choose a valid service date.' });
+    const created = await prisma.worshipLineup.create({
+      data: { serviceDate: date, serviceName: data.serviceName, submittedById: req.user.sub, songs: { create: data.songs.map((song, position) => ({ ...song, position })) } },
+      include: { submittedBy: { select: { id: true, name: true } }, songs: { orderBy: [{ category: 'asc' }, { position: 'asc' }] } },
+    });
+    await audit(req, 'CREATE', 'lineups', created.id, null, created);
+    res.status(201).json(created);
+  } catch (e) { next(e); }
+});
+app.delete('/api/lineups/:id', staff, async (req, res, next) => {
+  try {
+    const lineup = await prisma.worshipLineup.findUnique({ where: { id: req.params.id } });
+    if (!lineup) return res.status(404).json({ error: 'Line up not found.' });
+    if (req.user.role !== 'ADMIN' && lineup.submittedById !== req.user.sub) return res.status(403).json({ error: 'You can only remove your own line ups.' });
+    await prisma.worshipLineup.delete({ where: { id: lineup.id } });
+    await audit(req, 'DELETE', 'lineups', lineup.id, lineup, null);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
 app.get('/api/my-commitments', async (req, res, next) => {
   try {
     const member = await prisma.member.findUnique({ where: { userId: req.user.sub }, select: { id: true } });

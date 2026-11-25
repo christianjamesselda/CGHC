@@ -45,6 +45,7 @@ model User {
   auditLogs         AuditLog[]
   notifications     Notification[]
   membershipApplication MembershipApplication?
+  submittedLineups   WorshipLineup[]
 }
 
 model ChurchConfig {
@@ -198,6 +199,29 @@ model ServiceAssignment {
   member    Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
   @@unique([serviceId, memberId])
   @@index([memberId])
+}
+
+model WorshipLineup {
+  id          String        @id @default(cuid())
+  serviceDate DateTime      @db.Date
+  serviceName String
+  submittedAt DateTime      @default(now())
+  submittedById String
+  submittedBy User          @relation(fields: [submittedById], references: [id], onDelete: Cascade)
+  songs       LineupSong[]
+  @@index([serviceDate, serviceName])
+  @@index([submittedById, submittedAt])
+}
+
+model LineupSong {
+  id       String       @id @default(cuid())
+  lineupId String
+  title    String
+  category String
+  url      String
+  position Int
+  lineup   WorshipLineup @relation(fields: [lineupId], references: [id], onDelete: Cascade)
+  @@index([lineupId, category, position])
 }
 
 model Training {
