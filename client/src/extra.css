@@ -142,3 +142,17 @@ body{background:#f7f6f2}
 @keyframes scrim-in{from{opacity:0}to{opacity:1}}
 @media(max-width:780px){.dashboard-grid{animation-delay:.08s}.dashboard-bottom{animation-delay:.12s}.stat-card:hover{transform:none}}
 @media(prefers-reduced-motion:reduce){.page-heading,.page-heading-actions,.dashboard-grid,.dashboard-bottom,.welcome-banner .banner-copy>*,.sidebar-scrim,.notification-panel,.modal{animation:none!important}.stat-card:hover,.stat-card:hover .stat-icon,.btn:active,.icon-btn:active{transform:none!important}}
+
+.welcome-banner{justify-content:space-between;gap:28px}
+.hero-feature{position:relative;z-index:2;flex:0 1 300px;min-width:240px;padding:19px 20px 17px;border:1px solid #ffffff36;border-radius:14px;background:linear-gradient(145deg,#f9f6ed,#e8e1d3);color:#27271f;box-shadow:0 18px 40px #090c0a45;backdrop-filter:blur(12px);animation:feature-arrive .72s .22s cubic-bezier(.16,1,.3,1) both;transition:transform .25s ease,box-shadow .25s ease}
+.hero-feature:hover{transform:translateY(-4px);box-shadow:0 24px 46px #090c0a50}
+.hero-feature-label{display:flex;align-items:center;gap:7px;margin-bottom:13px;color:#897044;font-size:9px;font-weight:800;letter-spacing:1px}
+.hero-feature>strong{display:block;font:700 17px/1.35 Manrope, sans-serif;letter-spacing:-.35px}
+.hero-feature-meta{display:flex;flex-wrap:wrap;gap:6px 11px;margin-top:8px;color:#77766e;font-size:10px;line-height:1.5}
+.hero-feature-link{display:inline-flex;align-items:center;gap:7px;margin-top:16px;padding-top:12px;border-top:1px solid #d8d1c4;width:100%;color:#80643a;font-size:10px;font-weight:800}
+.hero-feature-link svg{transition:transform .2s ease}
+.hero-feature-link:hover svg{transform:translateX(3px)}
+@keyframes feature-arrive{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(max-width:780px){.welcome-banner{align-items:flex-start;flex-direction:column;gap:20px}.hero-feature{width:min(100%,420px);flex:0 1 auto}}
+@media(max-width:560px){.welcome-banner{gap:19px}.hero-feature{width:100%;min-width:0;padding:15px 16px}.hero-feature>strong{font-size:16px}.hero-feature-link{min-height:39px}}
+@media(prefers-reduced-motion:reduce){.hero-feature{animation:none!important}.hero-feature:hover{transform:none}}
