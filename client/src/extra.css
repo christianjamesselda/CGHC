@@ -106,3 +106,43 @@
 @media(max-width:780px){.welcome-banner{align-items:flex-start;flex-direction:column;gap:20px}.hero-feature{width:min(100%,420px);flex:0 1 auto}}
 @media(max-width:560px){.welcome-banner{gap:19px}.hero-feature{width:100%;min-width:0;padding:15px 16px}.hero-feature>strong{font-size:16px}.hero-feature-link{min-height:39px}}
 @media(prefers-reduced-motion:reduce){.hero-feature{animation:none!important}.hero-feature:hover{transform:none}}
+
+/* Keep the song detail toolbar compact after extra.css is loaded. */
+.modal-wide .modal-head{margin-bottom:6px}
+.modal-wide .modal-head h2{margin-top:4px;margin-bottom:0;line-height:1.18}
+.song-detail-meta{margin-top:0}
+.chord-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;flex-wrap:wrap}
+.chord-toolbar>.eyebrow{flex:1 1 auto;min-width:0}
+.transpose-controls{width:fit-content;max-width:100%;flex:0 0 auto;display:flex;align-items:center;justify-content:flex-start;gap:0;padding:0;border:0;background:transparent;min-width:0}
+.transpose-controls>span{position:static;width:auto;height:auto;margin:0 8px 0 0;padding:0;overflow:visible;clip:auto;white-space:nowrap;border:0;color:var(--muted);font-size:9px}
+.transpose-segment{width:102px;height:36px;display:flex;align-items:stretch;flex:0 0 102px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface)}
+.transpose-segment .icon-btn,.transpose-segment strong{width:34px;height:34px;min-width:34px;min-height:34px;flex:0 0 34px;border:0;border-radius:0;background:transparent;display:grid;place-items:center}
+.transpose-segment .icon-btn:hover{background:var(--bg)}
+.transpose-segment strong{border-inline:1px solid var(--line);font-size:10px;color:var(--ink)}
+.transpose-controls>.btn-quiet{width:28px;height:36px;min-width:28px;min-height:36px;margin:0 0 0 6px;padding:0;border:0;border-radius:0;background:transparent;color:var(--green);display:grid;place-items:center}
+.transpose-controls>.btn-quiet:hover{background:transparent;color:var(--green-dark)}
+.transpose-controls>.btn-quiet svg{width:15px;height:15px}
+@media(max-width:380px){
+ .modal-wide .modal-head{padding-bottom:0}
+ .chord-toolbar{row-gap:8px}
+ .chord-toolbar>.eyebrow{flex-basis:100%}
+ .transpose-controls{margin-left:auto;width:max-content}
+}
+
+/* Balanced transpose stepper and reset action. */
+.chord-toolbar .transpose-controls{width:auto;max-width:100%;margin-left:auto;gap:10px;padding:0;border:0;background:transparent}
+.chord-toolbar .transpose-controls>span{position:static;width:auto;height:auto;margin:0;padding:0;overflow:visible;clip:auto;color:var(--muted);font-size:10px;font-weight:700}
+.chord-toolbar .transpose-segment{width:auto;height:40px;flex:0 0 auto;border-radius:9px}
+.chord-toolbar .transpose-segment .icon-btn,.chord-toolbar .transpose-segment strong{width:40px;height:38px;min-width:40px;min-height:38px;flex:0 0 40px;border:0;border-radius:0;background:transparent;font-size:15px}
+.chord-toolbar .transpose-segment strong{border-inline:1px solid var(--line);font-size:12px}
+.chord-toolbar .transpose-segment .icon-btn:hover{background:var(--bg)}
+.chord-toolbar .transpose-controls>.btn-quiet{position:static;width:auto;height:40px;min-width:0;min-height:40px;margin:0;padding:0 12px!important;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--green);font-size:10px;font-weight:700}
+.chord-toolbar .transpose-controls>.btn-quiet::before,.chord-toolbar .transpose-controls>.btn-quiet::after{content:none}
+.chord-toolbar .transpose-controls>.btn-quiet:hover{background:var(--bg);color:var(--green-dark)}
+@media(max-width:560px){
+ .chord-toolbar .transpose-controls{width:100%;justify-content:space-between;gap:8px}
+ .chord-toolbar .transpose-controls>span{margin-right:auto}
+}
+@media(max-width:320px){
+ .chord-toolbar .transpose-controls{flex-wrap:wrap}
+}
