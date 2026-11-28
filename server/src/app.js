@@ -309,7 +309,7 @@ app.post('/api/uploads', auth, staff, upload.single('file'), async (req, res, ne
 const routes = {
   members: { model: 'member', roles: ['ADMIN', 'LEADER'], include: { ministry: true }, fields: ['firstName', 'lastName', 'age', 'photoUrl', 'instrument', 'ministryId', 'userId'] },
   ministries: { model: 'ministry', roles: ['ADMIN'], fields: ['name'] },
-  songs: { model: 'song', roles: ['ADMIN', 'LEADER'], include: { musicians: { include: { member: true } }, files: true }, fields: ['title', 'artist', 'originalKey', 'teamKey', 'bpm', 'worshipLeader', 'youtubeUrl', 'chordText', 'notes'] },
+  songs: { model: 'song', roles: ['ADMIN', 'LEADER'], include: { musicians: { include: { member: true } }, files: true }, fields: ['title', 'artist', 'originalKey', 'teamKey', 'bpm', 'worshipLeader', 'youtubeUrl', 'chordText', 'lyricsText', 'notes'] },
   schedules: { model: 'schedule', roles: ['ADMIN', 'LEADER'], include: { services: { include: { assignments: { include: { member: true } } } }, training: true }, fields: ['title', 'type', 'startsAt', 'endsAt', 'location', 'details'] },
   presentations: { model: 'presentation', roles: ['ADMIN', 'LEADER'], include: { slides: { orderBy: { position: 'asc' } } }, fields: ['title'] },
   links: { model: 'linkResource', roles: ['ADMIN', 'LEADER'], fields: ['title', 'url'] },
