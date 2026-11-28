@@ -140,9 +140,14 @@
 .chord-toolbar .transpose-controls>.btn-quiet::before,.chord-toolbar .transpose-controls>.btn-quiet::after{content:none}
 .chord-toolbar .transpose-controls>.btn-quiet:hover{background:var(--bg);color:var(--green-dark)}
 @media(max-width:560px){
- .chord-toolbar .transpose-controls{width:100%;justify-content:space-between;gap:8px}
- .chord-toolbar .transpose-controls>span{margin-right:auto}
+ .chord-toolbar{align-items:stretch}
+ .chord-toolbar>.eyebrow{align-self:flex-start;text-align:left}
+ .chord-toolbar .transpose-controls{width:100%;margin-left:0;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px}
+ .chord-toolbar .transpose-controls>span{margin:0;justify-self:start}
+ .chord-toolbar .transpose-controls>.btn-quiet{justify-self:end}
 }
 @media(max-width:320px){
- .chord-toolbar .transpose-controls{flex-wrap:wrap}
+ .chord-toolbar .transpose-controls{grid-template-columns:auto 1fr auto;gap:4px}
+ .chord-toolbar .transpose-segment{justify-self:center}
+ .chord-toolbar .transpose-controls>.btn-quiet{padding-inline:8px!important}
 }
