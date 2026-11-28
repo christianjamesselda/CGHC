@@ -133,3 +133,53 @@ p,li{ text-wrap:pretty }
   .song-image-preview,.transposed-sheet-preview{display:block;width:100%;height:auto}
   .lyrics-section{margin-top:18px}
 }
+@media(max-width:560px){
+  /* The detail header uses direct children; keep metadata above the action row. */
+  .song-detail-meta{display:flex;flex-flow:row wrap;align-items:center;gap:8px}
+  .song-detail-meta>span{flex:0 0 100%;min-height:24px!important}
+  .song-detail-meta>button{flex:1 1 calc(50% - 4px)!important;width:auto!important;min-width:0}
+  .song-detail-meta>button:only-of-type{flex-basis:100%!important}
+}
+@media(max-width:560px){
+  .song-detail-meta{display:flex;flex-flow:row wrap;align-items:center;gap:8px}
+  .song-detail-meta>span{flex:0 0 100%;min-height:24px!important;padding-inline:2px}
+  .song-detail-meta>button{flex:1 1 calc(50% - 4px)!important;width:auto!important;min-width:0;min-height:40px!important;height:40px!important;border-radius:9px;padding-inline:7px!important;white-space:nowrap!important}
+  .song-detail-meta>button:only-of-type{flex-basis:100%!important}
+  .song-detail-meta>button svg{width:14px;height:14px}
+  .chord-toolbar{display:flex;flex-flow:row wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:14px;margin-bottom:8px}
+  .chord-toolbar>.eyebrow{flex:1 1 auto;min-width:120px}
+  .transpose-controls{width:auto;flex:0 1 auto;display:flex;align-items:center;gap:0;padding:0;border:0;background:transparent}
+  .transpose-controls>span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .transpose-controls .icon-btn,.transpose-controls strong{width:36px;height:36px;min-width:36px;min-height:36px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
+  .transpose-controls .icon-btn:first-of-type{border-radius:8px 0 0 8px}
+  .transpose-controls strong{border-inline:0;border-radius:0;font-size:10px}
+  .transpose-controls .icon-btn:nth-of-type(2){border-radius:0 8px 8px 0}
+  .transpose-controls .btn-quiet{position:relative;width:34px;height:34px;min-width:34px;min-height:34px;margin-inline-start:6px;padding:0!important;border:1px solid var(--line);border-radius:50%;font-size:0;color:var(--green);background:transparent}
+  .transpose-controls .btn-quiet::before{content:'↻';font-size:17px;line-height:1}
+  .transpose-controls .btn-quiet::after{content:'Reset transpose';position:absolute;right:0;top:calc(100% + 7px);z-index:3;display:none;width:max-content;padding:5px 7px;border-radius:5px;background:var(--ink);color:var(--surface);font-size:9px;white-space:nowrap}
+  .transpose-controls .btn-quiet:hover::after,.transpose-controls .btn-quiet:focus-visible::after{display:block}
+}
+.song-detail-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.song-detail-meta>span{flex:0 0 100%;min-height:24px}
+.song-detail-meta>button{flex:1 1 180px;min-width:0;min-height:38px;height:38px;border-radius:9px;padding-inline:10px;white-space:nowrap}
+.chord-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.transpose-controls{display:flex;align-items:center;gap:0;padding:0;border:0;background:transparent}
+.transpose-controls .icon-btn,.transpose-controls strong{width:32px;height:32px;min-width:32px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
+.transpose-controls .icon-btn:first-of-type{border-radius:7px 0 0 7px}
+.transpose-controls strong{border-inline:0;border-radius:0;font-size:10px}
+.transpose-controls .icon-btn:nth-of-type(2){border-radius:0 7px 7px 0}
+.transpose-controls .btn-quiet{position:relative;width:30px;height:30px;min-width:30px;min-height:30px;margin-inline-start:6px;padding:0;border:1px solid var(--line);border-radius:50%;font-size:0;color:var(--green);background:transparent}
+.transpose-controls .btn-quiet::before{content:'↻';font-size:16px;line-height:1}
+.transpose-controls .btn-quiet::after{content:'Reset transpose';position:absolute;right:0;top:calc(100% + 6px);z-index:3;display:none;width:max-content;padding:5px 7px;border-radius:5px;background:var(--ink);color:var(--surface);font-size:9px;white-space:nowrap}
+.transpose-controls .btn-quiet:hover::after,.transpose-controls .btn-quiet:focus-visible::after{display:block}
+@media(max-width:560px){
+  .song-detail-meta{display:flex;flex-flow:row wrap;align-items:center;gap:8px}
+  .song-detail-meta>span{flex:0 0 100%;min-height:24px!important;padding-inline:2px}
+  .song-detail-meta>button{flex:1 1 calc(50% - 4px)!important;width:auto!important;min-width:0;min-height:40px!important;height:40px!important;padding-inline:7px!important;white-space:nowrap!important}
+  .song-detail-meta>button:only-of-type{flex-basis:100%!important}
+  .chord-toolbar{display:flex;flex-flow:row wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:14px;margin-bottom:8px}
+  .chord-toolbar>.eyebrow{flex:1 1 auto;min-width:120px}
+  .transpose-controls{width:auto;flex:0 1 auto}
+  .transpose-controls>span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .transpose-controls .icon-btn,.transpose-controls strong{width:36px;height:36px;min-width:36px;min-height:36px}
+}
