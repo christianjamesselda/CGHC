@@ -23,9 +23,9 @@
 .sidebar-signout{min-height:42px;display:flex;flex:none;align-items:center;justify-content:center;gap:6px;padding:0 9px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:#68756e;font-size:9px;font-weight:700;white-space:nowrap;cursor:pointer}
 .sidebar-signout:hover{color:var(--green);border-color:#a9cbb8;background:var(--green-soft)}
 @media(max-width:780px){
-  html,body,#root{max-width:100%;overflow-x:clip}
-  body{overscroll-behavior-x:none}
-  .app-shell,.main-area{width:100%;max-width:100vw;min-width:0;overflow-x:clip}
+  html,body,#root{max-width:100%}
+  body{overscroll-behavior-x:none;overflow-wrap:break-word}
+  .app-shell,.main-area{width:100%;max-width:100%;min-width:0}
   .sidebar{width:min(300px,82vw);height:100vh;height:100dvh;max-height:100dvh;overflow-y:auto;overscroll-behavior:contain;padding-top:max(16px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom));scrollbar-width:thin}
   .sidebar.open{z-index:50}
   .sidebar-scrim{display:block;position:fixed;inset:0;width:100%;height:100%;padding:0;border:0;background:rgba(15,25,20,.42);z-index:40}
@@ -61,4 +61,60 @@
   .modal-scrim{padding-top:max(6px,env(safe-area-inset-top))}.modal{max-height:calc(100dvh - env(safe-area-inset-top) - 6px);padding-inline:14px}.modal-wide{width:100%}.form-grid{gap:12px}.modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .lineup-card{padding:13px}.lineup-card-head h2{font-size:15px}.lineup-category{padding:12px}.lineup-song-fields{padding:11px}
   .toast{bottom:calc(72px + env(safe-area-inset-bottom))}
+}
+
+/* Final mobile alignment pass: keep every component inside its available width. */
+.song-row-open{display:flex;align-items:center;gap:11px;flex:1;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left}
+.song-row-open:focus-visible{outline:2px solid var(--green);outline-offset:3px;border-radius:7px}
+.song-row>button{min-width:0}
+.song-row .song-download{flex:0 0 42px}
+img,video,canvas,svg{max-inline-size:100%}
+h1,h2,h3{ text-wrap:balance }
+p,li{ text-wrap:pretty }
+@media(max-width:780px){
+  .page-wrap,.page-heading,.page-heading>div:first-child,.panel,.song-row,.schedule-card,.service-card,.presentation-card,.settings-panel{min-inline-size:0}
+  .page-heading h1{line-height:1.15}
+  .page-heading p{overflow-wrap:break-word}
+  .toolbar{align-items:stretch}
+  .toolbar .search-box{width:100%;min-height:44px}
+  .toolbar-right{width:100%}
+  .toolbar-right .filter-select,.toolbar-right .btn{min-height:44px}
+  .song-row{align-items:center;padding:10px}
+  .song-row-main strong,.song-row-main small{max-width:100%}
+  .song-row-icon{flex:none}
+  .key-chip,.tempo-chip{flex:none;white-space:nowrap}
+  .song-detail-meta{align-items:flex-start;flex-wrap:wrap;row-gap:8px}
+  .song-detail-meta>span{min-height:32px;display:inline-flex;align-items:center}
+  .song-detail-meta .btn{flex:1 1 145px;min-height:44px}
+  .chord-sheet{max-width:100%;overflow:auto;overflow-wrap:normal;word-break:normal}
+  .detail-actions{display:grid;grid-template-columns:1fr;align-items:stretch}
+  .detail-actions .btn,.detail-actions .upload-button{width:100%;min-height:44px}
+  .worship-hero{min-height:190px;padding:20px 18px}
+  .worship-hero h2{max-width:58%;font-size:clamp(20px,6vw,25px)}
+  .worship-hero p{max-width:58%;line-height:1.5}
+  .worship-orb{right:5%;top:50%;transform:translateY(-50%)}
+  .section-tabs{overflow-x:auto;gap:12px;scrollbar-width:none}
+  .section-tabs::-webkit-scrollbar{display:none}
+  .section-tabs button{flex:0 0 auto;min-height:44px}
+  .presenter-intro{align-items:flex-start;min-width:0}
+  .presenter-intro>div:first-child{min-width:0;flex:1}
+  .presenter-intro-art{flex:0 1 110px;max-width:36vw}
+  .presentation-card{grid-template-columns:52px minmax(0,1fr) 17px;gap:8px}
+  .schedule-tools{align-items:stretch}
+  .month-switch{min-width:0}
+  .month-switch strong{min-width:0;overflow-wrap:anywhere}
+}
+@media(max-width:400px){
+  .page-wrap{padding-inline:10px}
+  .topbar{padding-inline:8px}
+  .song-row{gap:6px}
+  .song-row-open{gap:7px}
+  .song-row-icon{width:30px;height:30px}
+  .song-row-main strong{font-size:9px}
+  .song-row-main small{font-size:7px}
+  .key-chip,.tempo-chip{font-size:7px;padding-inline:5px}
+  .song-row .song-download{flex-basis:38px}
+  .worship-hero h2,.worship-hero p{max-width:62%}
+  .worship-orb{width:88px;height:88px;right:3%}
+  .worship-orb svg{width:26px}
 }
